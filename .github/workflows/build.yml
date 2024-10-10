@@ -1,0 +1,45 @@
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1.0.6
+        with:
+          profile: minimal
+          toolchain: 1.81.0
+          override: true
+      - name: Check Out
+        uses: actions/checkout@v4.2.1
+      - name: Set up Cache
+        uses: actions/cache@v4.1.1
+        with:
+          path: |
+            ~/.cargo/bin
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target            
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-
+      - name: Build database
+        run: sqlite3 < create.sql db.sqlite3
+      - name: Cargo Release Build
+        run: cargo build --release
+      - uses: actions/upload-artifact@v3
+        with:
+          name: tickrs
+          path: target/release/tickrs
+          if-no-files-found: error
+      - name: Upload to server
+        run: |
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          echo "${{ secrets.ARTIFACT_SSH_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -p 22 ${{ secrets.ARTIFACT_HOST }} >> ~/.ssh/known_hosts
+          rsync -zp target/release/tickrs tickrs@${{ secrets.ARTIFACT_HOST }}:/opt/tickrs/          
