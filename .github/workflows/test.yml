@@ -36,6 +36,8 @@ jobs:
         uses: ./.github/actions/setup
         with:
           key: global-rust-cache
+      - name: Build database
+        run: sqlite3 db.sqlite3 < create.sql
       - name: Clippy
         run: RUSTFLAGS="-Dwarnings" cargo clippy
 
