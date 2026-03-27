@@ -280,7 +280,7 @@ impl From<&Counter> for HttpDate {
 
 impl Display for Counter {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}", self.value)
+        write!(f, "{}", self.value)
     }
 }
 
@@ -403,7 +403,7 @@ impl From<&Gauge> for HttpDate {
 
 impl Display for Gauge {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{:?}", self.value)
+        write!(f, "{}", self.value)
     }
 }
 
@@ -469,7 +469,7 @@ async fn get_plus_counter(path: Path<(String,)>, pool: Data<Pool<Sqlite>>) -> im
         HttpResponse::SeeOther()
             .insert_header((header::LOCATION, format!("/c/{}", path.0)))
             .insert_header(header::ContentType::plaintext())
-            .body(format!("{:?}", i))
+            .body(format!("{}", i))
     } else {
         HttpResponse::NotFound().body("")
     }
@@ -523,7 +523,7 @@ async fn post_counter(path: Path<(String,)>, pool: Data<Pool<Sqlite>>) -> impl R
         HttpResponse::SeeOther()
             .insert_header((header::LOCATION, format!("/c/{}", path.0)))
             .insert_header(header::ContentType::plaintext())
-            .body(format!("{:?}", i))
+            .body(format!("{}", i))
     } else {
         HttpResponse::InternalServerError().body("")
     }
@@ -562,7 +562,7 @@ async fn get_minus_gauge(path: Path<(String,)>, pool: Data<Pool<Sqlite>>) -> imp
         HttpResponse::SeeOther()
             .insert_header((header::LOCATION, format!("/g/{}", path.0)))
             .insert_header(header::ContentType::plaintext())
-            .body(format!("{:?}", i))
+            .body(format!("{}", i))
     } else {
         HttpResponse::NotFound().body("")
     }
@@ -577,7 +577,7 @@ async fn get_plus_gauge(path: Path<(String,)>, pool: Data<Pool<Sqlite>>) -> impl
         HttpResponse::SeeOther()
             .insert_header((header::LOCATION, format!("/g/{}", path.0)))
             .insert_header(header::ContentType::plaintext())
-            .body(format!("{:?}", i))
+            .body(format!("{}", i))
     } else {
         HttpResponse::NotFound().body("")
     }
@@ -646,7 +646,7 @@ async fn post_gauge(path: Path<(String,)>, pool: Data<Pool<Sqlite>>) -> impl Res
         HttpResponse::SeeOther()
             .insert_header((header::LOCATION, format!("/g/{}", path.0)))
             .insert_header(header::ContentType::plaintext())
-            .body(format!("{:?}", i))
+            .body(format!("{}", i))
     } else {
         HttpResponse::InternalServerError().body("")
     }
@@ -661,7 +661,7 @@ async fn post_minus_gauge(path: Path<(String,)>, pool: Data<Pool<Sqlite>>) -> im
         HttpResponse::SeeOther()
             .insert_header((header::LOCATION, format!("/g/{}", path.0)))
             .insert_header(header::ContentType::plaintext())
-            .body(format!("{:?}", i))
+            .body(format!("{}", i))
     } else {
         HttpResponse::NotFound().body("")
     }
