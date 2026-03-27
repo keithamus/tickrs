@@ -257,18 +257,17 @@ impl CounterLike for Counter {
 impl Counter {
     async fn increment_or_create(id: &str, pool: &Pool<Sqlite>) -> Result<i64> {
         let mut conn = pool.acquire().await?;
-        let res = sqlx::query!(
-            r#"UPDATE c SET value = value + 1 WHERE nano_id = ?1 RETURNING value"#,
+        let rec = sqlx::query!(
+            r#"INSERT INTO c (nano_id, value) VALUES (?1, 1)
+               ON CONFLICT(nano_id) DO UPDATE SET
+                 value = value + 1,
+                 updated_at = datetime('now', 'utc')
+               RETURNING value"#,
             id
         )
-        .fetch_optional(&mut *conn)
+        .fetch_one(&mut *conn)
         .await?;
-
-        if let Some(rec) = res {
-            Ok(rec.value)
-        } else {
-            Ok(Self::create_with_id_and_value(id, pool, 1).await?.value)
-        }
+        Ok(rec.value)
     }
 }
 
@@ -366,33 +365,32 @@ impl CounterLike for Gauge {
 impl Gauge {
     async fn decrement_or_create(id: &str, pool: &Pool<Sqlite>) -> Result<i64> {
         let mut conn = pool.acquire().await?;
-        let res = sqlx::query!(
-            r#"UPDATE g SET value = value - 1 WHERE nano_id = ?1 RETURNING value"#,
+        let rec = sqlx::query!(
+            r#"INSERT INTO g (nano_id, value) VALUES (?1, -1)
+               ON CONFLICT(nano_id) DO UPDATE SET
+                 value = value - 1,
+                 updated_at = datetime('now', 'utc')
+               RETURNING value"#,
             id
         )
-        .fetch_optional(&mut *conn)
+        .fetch_one(&mut *conn)
         .await?;
-
-        if let Some(rec) = res {
-            Ok(rec.value)
-        } else {
-            Ok(Self::create_with_id_and_value(id, pool, 1).await?.value)
-        }
+        Ok(rec.value)
     }
+
     async fn increment_or_create(id: &str, pool: &Pool<Sqlite>) -> Result<i64> {
         let mut conn = pool.acquire().await?;
-        let res = sqlx::query!(
-            r#"UPDATE g SET value = value + 1 WHERE nano_id = ?1 RETURNING value"#,
+        let rec = sqlx::query!(
+            r#"INSERT INTO g (nano_id, value) VALUES (?1, 1)
+               ON CONFLICT(nano_id) DO UPDATE SET
+                 value = value + 1,
+                 updated_at = datetime('now', 'utc')
+               RETURNING value"#,
             id
         )
-        .fetch_optional(&mut *conn)
+        .fetch_one(&mut *conn)
         .await?;
-
-        if let Some(rec) = res {
-            Ok(rec.value)
-        } else {
-            Ok(Self::create_with_id_and_value(id, pool, 1).await?.value)
-        }
+        Ok(rec.value)
     }
 }
 
