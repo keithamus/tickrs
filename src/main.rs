@@ -45,6 +45,15 @@ async fn main() -> Result<(), Error> {
         .await
         .expect("Could not enable WAL mode");
 
+    let host: Ipv4Addr = env::var("HOST")
+        .ok()
+        .and_then(|h| h.parse().ok())
+        .unwrap_or(Ipv4Addr::new(127, 0, 0, 1));
+    let port: u16 = env::var("PORT")
+        .ok()
+        .and_then(|p| p.parse().ok())
+        .unwrap_or(8126);
+
     Ok(HttpServer::new(move || {
         App::new()
             .wrap(middleware::Compress::default())
@@ -82,13 +91,8 @@ async fn main() -> Result<(), Error> {
             .service(post_gauge)
             .service(post_minus_gauge)
     })
-    .bind((
-        Ipv4Addr::new(127, 0, 0, 1),
-        env::var("PORT")
-            .ok()
-            .and_then(|p| p.parse::<u16>().ok())
-            .unwrap_or(8126),
-    ))?
+    .shutdown_timeout(30)
+    .bind((host, port))?
     .run()
     .await?)
 }
