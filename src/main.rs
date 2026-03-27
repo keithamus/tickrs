@@ -9,7 +9,7 @@ use actix_web::{
 };
 use actix_web_prom::PrometheusMetricsBuilder;
 use anyhow::Result;
-use askama_actix::Template;
+use askama::Template;
 use chrono::{DateTime, Utc};
 use lazy_static::lazy_static;
 use nanoid::nanoid;
@@ -40,6 +40,11 @@ async fn main() -> Result<(), Error> {
     let pool = SqlitePool::connect(&env::var("DATABASE_URL").expect("DATABASE_URL not configured"))
         .await
         .expect("Could not connect to database");
+
+    sqlx::query("PRAGMA journal_mode=WAL")
+        .execute(&pool)
+        .await
+        .expect("Could not enable WAL mode");
 
     Ok(HttpServer::new(move || {
         App::new()
@@ -95,7 +100,12 @@ struct IndexTemplate;
 
 #[get("/")]
 async fn index() -> impl Responder {
-    IndexTemplate
+    match IndexTemplate.render() {
+        Ok(body) => HttpResponse::Ok()
+            .insert_header(header::ContentType::html())
+            .body(body),
+        Err(e) => HttpResponse::InternalServerError().body(e.to_string()),
+    }
 }
 
 #[get("/favicon.ico")]
