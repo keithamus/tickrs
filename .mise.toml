@@ -1,0 +1,38 @@
+[tools]
+rust = { version = "1.90.0", components = "rustfmt,clippy" }
+
+[tasks.build]
+description = "Build all project files"
+sources = ["Cargo.toml", "src/**/*.rs"]
+outputs = ["target/debug/tickrs"]
+run = "cargo build"
+alias = "b"
+
+[tasks.build-release]
+description = "Build release binary"
+sources = ["Cargo.toml", "src/**/*.rs"]
+outputs = ["target/release/tickrs"]
+run = "cargo build --release"
+
+[tasks.test]
+description = "Run the test suite"
+sources = ["Cargo.toml", "src/**/*.rs"]
+run = "cargo test"
+alias = "t"
+
+[tasks.lint]
+description = "Lint all project files"
+sources = ["Cargo.toml", "src/**/*.rs"]
+run = "cargo clippy --all-targets --all-features"
+
+[tasks.fmt]
+description = "Format all project files"
+run = "cargo fmt"
+
+[tasks.fmt-check]
+description = "Check formatting"
+run = "cargo fmt --check"
+
+[tasks.db]
+description = "Create the SQLite database from create.sql"
+run = "sqlite3 db.sqlite3 < create.sql"
