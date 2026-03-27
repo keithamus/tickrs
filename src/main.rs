@@ -146,7 +146,7 @@ where
                 .body(&include_bytes!("../out.png")[..]),
             "jpg" => HttpResponse::Ok()
                 .insert_header(header::LastModified(self.into()))
-                .insert_header(header::ContentType::png())
+                .insert_header((header::CONTENT_TYPE, "image/jpeg"))
                 .body(&include_bytes!("../out.jpg")[..]),
             "gif" => HttpResponse::Ok()
                 .insert_header(header::LastModified(self.into()))
