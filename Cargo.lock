@@ -2142,7 +2142,6 @@ dependencies = [
  "askama",
  "chrono",
  "dotenvy",
- "lazy_static",
  "nanoid",
  "prometheus",
  "serde",

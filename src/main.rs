@@ -11,21 +11,20 @@ use actix_web_prom::PrometheusMetricsBuilder;
 use anyhow::Result;
 use askama::Template;
 use chrono::{DateTime, Utc};
-use lazy_static::lazy_static;
 use nanoid::nanoid;
 use prometheus::default_registry;
 use sqlx::{sqlite::SqlitePool, Pool, Sqlite};
-use std::{env, fmt::Display, net::Ipv4Addr, time::SystemTime};
+use std::{env, fmt::Display, net::Ipv4Addr, sync::LazyLock, time::SystemTime};
 
-lazy_static! {
-    static ref REF: &'static str = include_str!("../.git/HEAD");
-    static ref REF_MAIN: &'static str = include_str!("../.git/refs/heads/main");
-    static ref HASH: &'static str = if REF.contains("refs/heads/main") {
+static REF: LazyLock<&'static str> = LazyLock::new(|| include_str!("../.git/HEAD"));
+static REF_MAIN: LazyLock<&'static str> = LazyLock::new(|| include_str!("../.git/refs/heads/main"));
+static HASH: LazyLock<&'static str> = LazyLock::new(|| {
+    if REF.contains("refs/heads/main") {
         &REF_MAIN
     } else {
         &REF
-    };
-}
+    }
+});
 
 #[actix_web::main]
 async fn main() -> Result<(), Error> {
