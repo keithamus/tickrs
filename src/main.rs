@@ -12,9 +12,9 @@ use anyhow::Result;
 use askama::Template;
 use chrono::{DateTime, Utc};
 use nanoid::nanoid;
-use prometheus::default_registry;
+use prometheus::{default_registry, IntGauge, Registry};
 use sqlx::{sqlite::SqlitePool, Pool, Sqlite};
-use std::{env, fmt::Display, net::Ipv4Addr, sync::LazyLock, time::SystemTime};
+use std::{env, fmt::Display, net::Ipv4Addr, sync::LazyLock, time::Duration, time::SystemTime};
 
 static REF: LazyLock<&'static str> = LazyLock::new(|| include_str!("../.git/HEAD"));
 static REF_MAIN: LazyLock<&'static str> = LazyLock::new(|| include_str!("../.git/refs/heads/main"));
@@ -26,17 +26,110 @@ static HASH: LazyLock<&'static str> = LazyLock::new(|| {
     }
 });
 
+#[derive(Clone)]
+struct DbMetrics {
+    counters_total: IntGauge,
+    gauges_total: IntGauge,
+    db_size_bytes: IntGauge,
+    db_wal_size_bytes: IntGauge,
+    db_page_count: IntGauge,
+    db_freelist_count: IntGauge,
+}
+
+impl DbMetrics {
+    fn register(registry: &Registry) -> Self {
+        let counters_total =
+            IntGauge::new("tickrs_db_counters_total", "Total number of counters").unwrap();
+        let gauges_total =
+            IntGauge::new("tickrs_db_gauges_total", "Total number of gauges").unwrap();
+        let db_size_bytes = IntGauge::new(
+            "tickrs_db_size_bytes",
+            "Size of the main database file in bytes",
+        )
+        .unwrap();
+        let db_wal_size_bytes =
+            IntGauge::new("tickrs_db_wal_size_bytes", "Size of the WAL file in bytes").unwrap();
+        let db_page_count =
+            IntGauge::new("tickrs_db_page_count", "Total pages in the database").unwrap();
+        let db_freelist_count =
+            IntGauge::new("tickrs_db_freelist_count", "Free pages available for reuse").unwrap();
+
+        registry.register(Box::new(counters_total.clone())).unwrap();
+        registry.register(Box::new(gauges_total.clone())).unwrap();
+        registry.register(Box::new(db_size_bytes.clone())).unwrap();
+        registry
+            .register(Box::new(db_wal_size_bytes.clone()))
+            .unwrap();
+        registry.register(Box::new(db_page_count.clone())).unwrap();
+        registry
+            .register(Box::new(db_freelist_count.clone()))
+            .unwrap();
+
+        Self {
+            counters_total,
+            gauges_total,
+            db_size_bytes,
+            db_wal_size_bytes,
+            db_page_count,
+            db_freelist_count,
+        }
+    }
+
+    async fn refresh(&self, pool: &Pool<Sqlite>, db_path: &str) {
+        // Row counts
+        if let Ok(n) = sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM c")
+            .fetch_one(pool)
+            .await
+        {
+            self.counters_total.set(n);
+        }
+        if let Ok(n) = sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM g")
+            .fetch_one(pool)
+            .await
+        {
+            self.gauges_total.set(n);
+        }
+
+        // SQLite page stats
+        if let Ok(n) = sqlx::query_scalar::<_, i64>("PRAGMA page_count")
+            .fetch_one(pool)
+            .await
+        {
+            self.db_page_count.set(n);
+        }
+        if let Ok(n) = sqlx::query_scalar::<_, i64>("PRAGMA freelist_count")
+            .fetch_one(pool)
+            .await
+        {
+            self.db_freelist_count.set(n);
+        }
+
+        // File sizes from the filesystem
+        let path = db_path.strip_prefix("sqlite://").unwrap_or(db_path);
+        if let Ok(meta) = std::fs::metadata(path) {
+            self.db_size_bytes.set(meta.len() as i64);
+        }
+        let wal_path = format!("{}-wal", path);
+        match std::fs::metadata(&wal_path) {
+            Ok(meta) => self.db_wal_size_bytes.set(meta.len() as i64),
+            Err(_) => self.db_wal_size_bytes.set(0),
+        }
+    }
+}
+
 #[actix_web::main]
 async fn main() -> Result<(), Error> {
     dotenvy::dotenv().unwrap();
 
+    let registry = default_registry().clone();
     let prometheus = PrometheusMetricsBuilder::new("api")
         .endpoint("/metrics")
-        .registry(default_registry().clone())
+        .registry(registry.clone())
         .build()
         .unwrap();
 
-    let pool = SqlitePool::connect(&env::var("DATABASE_URL").expect("DATABASE_URL not configured"))
+    let db_url = env::var("DATABASE_URL").expect("DATABASE_URL not configured");
+    let pool = SqlitePool::connect(&db_url)
         .await
         .expect("Could not connect to database");
 
@@ -44,6 +137,19 @@ async fn main() -> Result<(), Error> {
         .execute(&pool)
         .await
         .expect("Could not enable WAL mode");
+
+    // Register and start periodic DB metrics refresh
+    let db_metrics = DbMetrics::register(&registry);
+    let db_metrics_bg = db_metrics.clone();
+    let pool_bg = pool.clone();
+    let db_url_bg = db_url.clone();
+    actix_web::rt::spawn(async move {
+        let mut ticker = actix_web::rt::time::interval(Duration::from_secs(30));
+        loop {
+            ticker.tick().await;
+            db_metrics_bg.refresh(&pool_bg, &db_url_bg).await;
+        }
+    });
 
     let host: Ipv4Addr = env::var("HOST")
         .ok()
